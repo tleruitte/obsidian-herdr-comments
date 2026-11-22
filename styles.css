@@ -1,0 +1,132 @@
+/* Markers in the editor */
+
+.herdr-comments-highlight {
+  background-color: rgba(var(--color-yellow-rgb), 0.25);
+  border-bottom: 1px solid rgba(var(--color-yellow-rgb), 0.8);
+  cursor: pointer;
+}
+
+.herdr-comments-gutter-mark {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 4px;
+  color: var(--text-accent);
+  cursor: pointer;
+}
+
+.herdr-comments-gutter-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Markers in the reading view */
+
+.herdr-comments-block {
+  position: relative;
+}
+
+.herdr-comments-block-mark {
+  position: absolute;
+  top: 0.2em;
+  left: -24px;
+  color: var(--text-accent);
+  cursor: pointer;
+}
+
+.herdr-comments-block-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Side panel */
+
+.herdr-comments-header {
+  padding-bottom: var(--size-4-2);
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: var(--size-4-2);
+}
+
+.herdr-comments-target {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+.herdr-comments-to {
+  flex: 1;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.herdr-comments-panel .clickable-icon.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.herdr-comments-error {
+  margin-top: var(--size-4-1);
+  font-size: var(--font-ui-small);
+  color: var(--text-error);
+}
+
+.herdr-comments-item {
+  padding: var(--size-4-2);
+  margin-bottom: var(--size-4-2);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+}
+
+.herdr-comments-item.is-selected,
+.herdr-comments-item.is-draft {
+  border-color: var(--interactive-accent);
+}
+
+.herdr-comments-item-top {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+.herdr-comments-span {
+  flex: 1;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.herdr-comments-item.is-orphan .herdr-comments-span {
+  color: var(--text-warning);
+}
+
+.herdr-comments-quote {
+  margin: var(--size-4-1) 0;
+  padding-left: var(--size-4-2);
+  border-left: 2px solid rgba(var(--color-yellow-rgb), 0.8);
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.herdr-comments-item.is-orphan .herdr-comments-quote {
+  text-decoration: line-through;
+}
+
+.herdr-comments-text {
+  white-space: pre-wrap;
+}
+
+.herdr-comments-box {
+  width: 100%;
+  resize: vertical;
+}
+
+.herdr-comments-empty,
+.herdr-comments-others {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}

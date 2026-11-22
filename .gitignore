@@ -1,0 +1,7 @@
+node_modules
+# The build, and the data of the plugin when the folder is linked into a vault
+main.js
+data.json
+
+# macOS
+.DS_Store
