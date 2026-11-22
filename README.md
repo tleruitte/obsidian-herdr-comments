@@ -21,7 +21,7 @@ The plugin works only on the desktop. Herdr must run on the same computer.
 
 3. Set the shortcuts in **Settings → Hotkeys**. The plugin has none of its own. We suggest:
    - `⌘I` for **Herdr Comments: Add comment**. This replaces **Toggle italics**.
-   - `⌘⇧I` for **Herdr Comments: Submit comments**. This replaces the shortcut of the developer tools.
+   - `⌘⇧I` for **Herdr Comments: Submit comments**.
 
 ## How to use
 
