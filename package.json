@@ -1,6 +1,6 @@
 {
   "name": "obsidian-herdr-comments",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Obsidian plugin that sends comments on the text of a note to the coding agent of the note in Herdr.",
   "private": true,
   "repository": {

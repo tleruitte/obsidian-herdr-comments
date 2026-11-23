@@ -1,7 +1,7 @@
 {
   "id": "herdr-comments",
   "name": "Herdr Comments",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "1.7.2",
   "description": "Comment on the text of a note, and send the comments to the coding agent of the note in Herdr.",
   "author": "Thibault Leruitte",
