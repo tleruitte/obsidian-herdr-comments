@@ -151,6 +151,17 @@ export class Store {
     }
   }
 
+  /** The comments of a note, in the order they were written. */
+  inOrder(path: string): Pending[] {
+    return this.pending.filter((p) => p.path === path);
+  }
+
+  /** Removes the comments that went to the agent. A comment saved during the send stays. */
+  remove(path: string, ids: string[]): void {
+    this.pending = this.pending.filter((p) => !ids.includes(p.id));
+    this.changed(path);
+  }
+
   clearNote(path: string): void {
     this.pending = this.pending.filter((p) => p.path !== path);
     this.changed(path);

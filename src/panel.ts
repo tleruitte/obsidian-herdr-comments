@@ -1,18 +1,14 @@
 import * as path from "node:path";
-import { ItemView, Notice, SuggestModal, TFile, WorkspaceLeaf, setIcon } from "obsidian";
-import { Pending, Place, reviewMessage, spanLabel } from "./comments";
+import { ItemView, SuggestModal, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { Pending, Place, spanLabel } from "./comments";
 import * as herdr from "./herdr";
 import type HerdrCommentsPlugin from "./main";
+import { targetKey } from "./sender";
 
 export const VIEW_TYPE = "herdr-comments";
 
 /** How often the panel checks the agents while it shows. */
 const REFRESH_MS = 3_000;
-
-/** A key that changes when the target changes, so Submit never goes to an agent the person did not see. */
-function targetKey(target: herdr.Target): string {
-  return target.kind === "agent" ? target.agent.address : `start:${target.folder}`;
-}
 
 /** A comment that the person writes, before it is saved. */
 interface Draft {
@@ -57,13 +53,9 @@ export class Panel extends ItemView {
   private note: TFile | null = null;
   private lookup: herdr.Lookup | undefined;
   private unavailable: string | undefined;
-  private error: string | undefined;
-  /** The agent the person picked for each note. */
-  private readonly chosen = new Map<string, string>();
   /** The target that the panel shows now. */
   private shown: string | undefined;
   private refreshing: Promise<void> | undefined;
-  private sending = false;
   private draft: Draft | undefined;
   /** The comment that the person edits, and the text in its box. */
   private editing: string | undefined;
@@ -96,12 +88,20 @@ export class Panel extends ItemView {
     this.contentEl.addClass("herdr-comments-panel");
     this.headerEl = this.contentEl.createDiv({ cls: "herdr-comments-header" });
     this.listEl = this.contentEl.createDiv({ cls: "herdr-comments-list" });
-    const { store } = this.plugin;
+    const { store, sender } = this.plugin;
     const offChange = store.onChange(() => {
-      this.error = undefined;
       this.render();
       void this.refresh();
     });
+    // A send started, ended, or waits; or the person chose another agent.
+    this.register(
+      sender.onChange((p) => {
+        if (p === null || p === this.note?.path) {
+          this.renderHeader();
+          void this.refresh();
+        }
+      }),
+    );
     const offMove = store.onMove((p) => {
       if (p === this.note?.path) {
         this.render();
@@ -132,7 +132,6 @@ export class Panel extends ItemView {
     this.editing = undefined;
     this.lookup = undefined;
     this.shown = undefined;
-    this.error = undefined;
     this.render();
     void this.refresh();
   }
@@ -234,8 +233,9 @@ export class Panel extends ItemView {
     } else {
       submit.addClass("is-disabled");
     }
-    if (this.error) {
-      el.createDiv({ cls: "herdr-comments-error", text: this.error });
+    const error = this.plugin.sender.error(this.note.path);
+    if (error) {
+      el.createDiv({ cls: "herdr-comments-error", text: error });
     }
   }
 
@@ -286,6 +286,7 @@ export class Panel extends ItemView {
         this.boxText = "";
         this.plugin.store.add(draft.path, draft.place, text);
         this.plugin.focusNote(draft.path);
+        void this.plugin.sender.saved(draft.path);
       },
       () => {
         this.draft = undefined;
@@ -331,6 +332,7 @@ export class Panel extends ItemView {
           this.editing = undefined;
           if (text) {
             this.plugin.store.edit(p.id, text);
+            void this.plugin.sender.saved(p.path);
           } else {
             this.render();
           }
@@ -363,9 +365,12 @@ export class Panel extends ItemView {
         : `No agent works in ${folder}. Open the Herdr window to start one.`;
     }
     const to = `To: ${herdr.describeAgent(target.agent)}.`;
-    return target.agent.status === "blocked"
-      ? `${to} It waits for your answer in Herdr: answer it there, then submit.`
-      : to;
+    if (target.agent.status !== "blocked") {
+      return to;
+    }
+    return this.plugin.settings.sendImmediately
+      ? `${to} It waits for your answer in Herdr: the comments go after you answer it there.`
+      : `${to} It waits for your answer in Herdr: answer it there, then submit.`;
   }
 
   private canSubmit(): boolean {
@@ -374,8 +379,8 @@ export class Panel extends ItemView {
     const blocked = target?.kind === "agent" && target.agent.status === "blocked";
     const canStart = target?.kind === "start" && lookup?.windowOpen === true;
     return (
-      !this.sending &&
       !!this.note &&
+      !this.plugin.sender.isSending(this.note.path) &&
       this.plugin.store.forNote(this.note.path).length > 0 &&
       ((target?.kind === "agent" && !blocked) || canStart)
     );
@@ -402,7 +407,7 @@ export class Panel extends ItemView {
         const lookup = await herdr.lookUp(
           this.notePath(note),
           this.plugin.vaultPath(),
-          this.chosen.get(note.path),
+          this.plugin.sender.chosenFor(note.path),
         );
         // The person opened another note in the meantime.
         if (note !== this.note) {
@@ -431,57 +436,15 @@ export class Panel extends ItemView {
     }
     const current = lookup.target.kind === "agent" ? lookup.target.agent.address : undefined;
     new AgentModal(this, lookup.candidates, current, (agent) => {
-      this.chosen.set(note.path, agent.address);
-      void this.refresh();
+      this.plugin.sender.choose(note.path, agent.address);
     }).open();
   }
 
   /** Sends the comments of the note, or starts an agent with them when no agent works in its folder. */
   async submit(): Promise<void> {
     const note = this.note;
-    if (!note || this.sending) {
-      return;
-    }
-    const list = this.plugin.store.forNote(note.path);
-    if (!list.length) {
-      return;
-    }
-    const before = this.shown;
-    this.error = undefined;
-    await this.refresh();
-    const target = this.lookup?.target;
-    if (!target || note !== this.note) {
-      return;
-    }
-    // The agent left or another one took its place: show the new one first.
-    if (targetKey(target) !== before) {
-      new Notice("The agent that gets the comments changed. Look at the panel, then submit again.");
-      return;
-    }
-    if (target.kind === "agent" && target.agent.status === "blocked") {
-      return;
-    }
-    const { agent: program, chat } = this.plugin.settings;
-    const n = `${list.length} comment${list.length > 1 ? "s" : ""}`;
-    this.sending = true;
-    this.renderHeader();
-    try {
-      if (target.kind === "agent") {
-        const text = reviewMessage(path.relative(target.agent.cwd, this.notePath(note)), list);
-        await herdr.send(target.agent, text);
-        new Notice(`Sent ${n} to ${herdr.describeAgent(target.agent)}.`);
-      } else {
-        const text = reviewMessage(path.basename(note.path), list);
-        await herdr.start(target.folder, program, text, chat);
-        new Notice(`Started ${herdr.programName(program)} in Herdr with ${n}.`);
-      }
-      this.sending = false;
-      this.plugin.store.clearNote(note.path);
-    } catch (e) {
-      this.sending = false;
-      this.error = `Send failed: ${e instanceof Error ? e.message : String(e)}`;
-      new Notice(this.error);
-      this.renderHeader();
+    if (note) {
+      await this.plugin.sender.submit(note.path, this.shown);
     }
   }
 }

@@ -13,15 +13,21 @@ import {
 import { Pending, Place, Store } from "./comments";
 import { markers } from "./markers";
 import { Panel, VIEW_TYPE } from "./panel";
+import { Sender } from "./sender";
+
+/** How often the plugin checks the agents of the comments that wait for them. */
+const WAIT_MS = 3_000;
 
 interface Settings {
   /** The agent that Herdr starts with the comments when no agent works in the folder of the note. */
   agent: string;
   /** The Herdr mod that shows the new agent as a chat. */
   chat: string;
+  /** Send each comment to the agent when the person saves it, without Submit. */
+  sendImmediately: boolean;
 }
 
-const DEFAULTS: Settings = { agent: "claude", chat: "chat" };
+const DEFAULTS: Settings = { agent: "claude", chat: "chat", sendImmediately: true };
 
 interface Data extends Settings {
   comments: Pending[];
@@ -30,6 +36,7 @@ interface Data extends Settings {
 export default class HerdrCommentsPlugin extends Plugin {
   settings: Settings = DEFAULTS;
   store!: Store;
+  sender!: Sender;
   private readonly save = debounce(() => void this.saveData(this.data()), 500, true);
 
   async onload(): Promise<void> {
@@ -37,8 +44,11 @@ export default class HerdrCommentsPlugin extends Plugin {
     this.settings = {
       agent: data.agent ?? DEFAULTS.agent,
       chat: data.chat ?? DEFAULTS.chat,
+      sendImmediately: data.sendImmediately ?? DEFAULTS.sendImmediately,
     };
     this.store = new Store(data.comments ?? [], () => this.save());
+    this.sender = new Sender(this);
+    this.registerInterval(window.setInterval(() => this.sender.tick(), WAIT_MS));
 
     this.registerView(VIEW_TYPE, (leaf) => new Panel(leaf, this));
     const { editor, reading } = markers(this.store, (id) => void this.select(id));
@@ -250,6 +260,18 @@ class SettingTab extends PluginSettingTab {
         text.setValue(this.plugin.settings.chat).onChange(async (value) => {
           this.plugin.settings.chat = value.trim();
           await this.plugin.saveSettings();
+        }),
+      );
+    new Setting(containerEl)
+      .setName("Send immediately")
+      .setDesc(
+        "Send each comment to the agent when you save it, without Submit. When the agent waits for your answer to a prompt in Herdr, the comment waits and goes after the answer. Turn it off to keep the comments of a note pending and send them as one review with Submit.",
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.sendImmediately).onChange(async (value) => {
+          this.plugin.settings.sendImmediately = value;
+          await this.plugin.saveSettings();
+          this.plugin.sender.preferenceChanged();
         }),
       );
   }
