@@ -183,10 +183,10 @@ export class Sender {
     this.changed(note);
     try {
       if (target.kind === "agent") {
-        await herdr.send(target.agent, reviewMessage(path.relative(target.agent.cwd, notePath), list));
+        await herdr.send(target.agent, reviewMessage(herdr.notePathFor(target.agent.cwd, notePath), list));
         tell(`Sent ${n} to ${herdr.describeAgent(target.agent)}.`);
       } else {
-        await herdr.start(target.folder, program, reviewMessage(path.basename(note), list), chat);
+        await herdr.start(target.folder, program, reviewMessage(herdr.notePathFor(target.folder, notePath), list), chat);
         this.startedAt.set(target.folder, Date.now());
         tell(`Started ${herdr.programName(program)} in Herdr with ${n}.`);
       }

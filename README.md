@@ -35,8 +35,9 @@ The plugin works only on the desktop. Herdr must run on the same computer.
 
 4. The top of the panel says which agent gets the comments, for example `To: Claude · setup / fix login`:
    - The candidates are the agents in Herdr whose folder holds the note and is in the vault.
+   - When the note is in the folder of a task of the Herdr tasks mod (a folder of the vault with a `task.json`), the agents in the space of the task are candidates too: the agents in the worktree of the task, else in the folder of the task. They get the full path of the note.
    - The default is the agent that has the focus in Herdr, else an idle one, else the first. Click the person icon to choose another candidate.
-   - With no candidate, a new agent starts with the first comment, in the folder of the note, and the next comments go to it: in a new tab of the Herdr space of that folder, else in a new space. The **Agent** setting says which agent (`claude` by default).
+   - With no candidate, a new agent starts with the first comment, in the folder of the space of the task, else in the folder of the note, and the next comments go to it: in a new tab of the Herdr space of that folder, else in a new space. The **Agent** setting says which agent (`claude` by default).
    - When [herdr-chat](https://github.com/ChmaraX/herdr-chat) is installed, the new agent is a chat. The **Chat** setting says which chat mod (`chat` by default). Without that mod, or for an agent other than `claude`, `codex`, or `pi`, the agent starts in a terminal.
 
 5. Each comment goes to the agent when you save it, to the agent that the top of the panel shows then. The agent gets the path of the note, the line, the text as it was when you wrote the comment, and the comment. A working agent gets it during its turn.

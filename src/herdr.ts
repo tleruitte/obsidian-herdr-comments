@@ -40,6 +40,7 @@ interface Terminal {
 
 interface Space {
   id: string;
+  folder?: string;
   machine: string | null;
   tabs: { terminals: { terminal: string }[] }[];
 }
@@ -150,6 +151,43 @@ function isInside(folder: string, p: string): boolean {
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
+/** The record of a task of the tasks mod of Herdr, `task.json` in the folder of the task. */
+interface TaskRecord {
+  worktree?: unknown;
+  pending?: { from?: unknown };
+}
+
+/**
+ * The folder of the task whose folder holds the note, in the vault. The tasks
+ * mod of Herdr keeps the notes of a task in a folder with a `task.json`, and
+ * makes the space of the task in its worktree: the folder of the space is
+ * `pending.from` (while the space waits to move), else `worktree`, else the
+ * folder of the task. `undefined` when no folder of the vault holds a record.
+ */
+function taskFolder(note: string, vault: string): string | undefined {
+  for (let dir = path.dirname(note); isInside(vault, dir); dir = path.dirname(dir)) {
+    let record: TaskRecord;
+    try {
+      record = JSON.parse(fs.readFileSync(path.join(dir, "task.json"), "utf8")) as TaskRecord;
+    } catch {
+      if (dir === path.dirname(dir)) {
+        break;
+      }
+      continue;
+    }
+    const at = [record.pending?.from, record.worktree].find(
+      (f): f is string => typeof f === "string" && f !== "",
+    );
+    return at ? at.replace(/\/+$/, "") : dir;
+  }
+  return undefined;
+}
+
+/** The path of the note for an agent in `cwd`: relative when the folder holds the note, else absolute. */
+export function notePathFor(cwd: string, note: string): string {
+  return isInside(cwd, note) ? path.relative(realPath(cwd), realPath(note)) : note;
+}
+
 /** "claude" → "Claude". */
 export function programName(command: string): string {
   const program = path.basename(command.trim().split(/\s+/)[0] ?? "");
@@ -162,9 +200,11 @@ export function describeAgent(agent: Agent): string {
 
 /**
  * The candidates are the agents whose folder holds the note and is in the
- * vault. The target is the `chosen` candidate, else the candidate that has the
- * focus in Herdr, else an idle one, else the first. With no candidate, the
- * target is a new agent in the folder of the note.
+ * vault, and, for a note in the folder of a task, the agents in the folder of
+ * the space of the task. The target is the `chosen` candidate, else the
+ * candidate that has the focus in Herdr, else an idle one, else the first.
+ * With no candidate, the target is a new agent in the folder of the space of
+ * the task, else in the folder of the note.
  */
 export async function lookUp(
   note: string,
@@ -175,9 +215,14 @@ export async function lookUp(
     liveTerminals(),
     windowFocus(),
   ]);
+  const task = taskFolder(note, vault);
   const candidates: Agent[] = terminals
     .filter(
-      (t) => t.status && t.cwd && isInside(vault, t.cwd) && isInside(t.cwd, note),
+      (t) =>
+        t.status &&
+        t.cwd &&
+        ((isInside(vault, t.cwd) && isInside(t.cwd, note)) ||
+          (task !== undefined && isInside(task, t.cwd))),
     )
     .map((t) => ({
       address: t.address,
@@ -194,7 +239,7 @@ export async function lookUp(
   return {
     target: agent
       ? { kind: "agent", agent }
-      : { kind: "start", folder: path.dirname(note) },
+      : { kind: "start", folder: task ?? path.dirname(note) },
     candidates,
     windowOpen: focus.open,
   };
@@ -243,7 +288,8 @@ async function chatHost(chat: string): Promise<string> {
 
 /**
  * Starts `command` with the text as its first message: in a new tab of the
- * space whose terminals are in the folder, else in a new space at the folder.
+ * space of the folder, else of the space whose terminals are in the folder,
+ * else in a new space at the folder.
  * The agent is a chat of `chatMod` when that mod is installed and can show the
  * agent, else a terminal.
  */
@@ -259,16 +305,17 @@ export async function start(
     liveTerminals(),
   ]);
   const cwds = new Map(terminals.map((t) => [t.address, t.cwd]));
-  const space = layout.spaces.find(
-    (s) =>
-      s.machine === null &&
+  const local = layout.spaces.filter((s) => s.machine === null);
+  const space =
+    local.find((s) => s.folder !== undefined && realPath(s.folder) === realPath(folder)) ??
+    local.find((s) =>
       s.tabs.some((tab) =>
         tab.terminals.some((t) => {
           const cwd = cwds.get(t.terminal);
           return cwd !== undefined && isInside(folder, cwd);
         }),
       ),
-  );
+    );
   const provider = chatProvider(command, chatMod);
   if (!provider) {
     const argv = command.trim().split(/\s+/);
